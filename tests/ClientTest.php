@@ -7,6 +7,7 @@ namespace HeroShots\Tests;
 use GuzzleHttp\Client as Http;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use HeroShots\Client;
@@ -22,15 +23,21 @@ final class ClientTest extends TestCase
     private array $history = [];
 
     /** @param Response[] $responses */
-    private function client(array $responses, bool $autoRelogin = false): Client
+    private function client(array $responses): Client
+    {
+        return new Client('https://api.test', 'tok', null, null, false, 120.0, $this->mockHttp($responses));
+    }
+
+    /** @param Response[] $responses */
+    private function mockHttp(array $responses): Http
     {
         $this->history = [];
         $stack = HandlerStack::create(new MockHandler($responses));
-        $stack->push(\GuzzleHttp\Middleware::history($this->history));
-        $http = new Http(['handler' => $stack, 'http_errors' => false]);
-        return new Client('https://api.test', 'tok', null, null, $autoRelogin, 120.0, $http);
+        $stack->push(Middleware::history($this->history));
+        return new Http(['handler' => $stack, 'http_errors' => false]);
     }
 
+    /** @param array<string,mixed> $data */
     private function json(array $data, int $status = 200): Response
     {
         return new Response($status, ['Content-Type' => 'application/json'], json_encode($data));
@@ -46,12 +53,15 @@ final class ClientTest extends TestCase
         $this->assertSame(5, $out['_meta']['credits_remaining']);
     }
 
-    public function testPortalResponseIsBare(): void
+    public function testBalanceReadsStats(): void
     {
-        $client = $this->client([$this->json(['configured' => true, 'voices' => []])]);
-        $out = $client->audio->voices();
-        $this->assertTrue($out['configured']);
-        $this->assertArrayNotHasKey('data', $out);
+        $client = $this->client([
+            $this->json(['hs_credits' => 120, 'total_credits_used' => 30, 'plan' => ['wallet_balance' => 9.5]]),
+        ]);
+        $bal = $client->balance();
+        $this->assertSame(120, $bal['hs_credits']);
+        $this->assertSame(9.5, $bal['plan']['wallet_balance']);
+        $this->assertArrayNotHasKey('data', $bal);
     }
 
     public function testValidationErrorMapping(): void
@@ -76,7 +86,7 @@ final class ClientTest extends TestCase
     {
         $client = $this->client([new Response(429, [], 'too many')]);
         $this->expectException(RateLimitException::class);
-        $client->account->stats();
+        $client->balance();
     }
 
     public function testUploadSendsMultipartFile(): void
@@ -111,6 +121,25 @@ final class ClientTest extends TestCase
         $client->longvideo->wait(9, 0.0, 5.0);
     }
 
+    public function testVideoWaitUsesSucceededTerminal(): void
+    {
+        $client = $this->client([
+            $this->json(['task_id' => 't1', 'status' => 'succeeded', 'video_url' => 'https://cdn/v.mp4']),
+        ]);
+        $out = $client->videos->wait('t1', 0.0, 5.0);
+        $this->assertStringEndsWith('v.mp4', $out['video_url']);
+    }
+
+    public function testAvatarsListUsesV1(): void
+    {
+        $client = $this->client([
+            $this->json(['success' => true, 'data' => ['avatars' => [['id' => 1]]], 'meta' => []]),
+        ]);
+        $out = $client->avatars->list();
+        $this->assertCount(1, $out['avatars']);
+        $this->assertStringContainsString('/api/v1/avatar/list', (string) $this->history[0]['request']->getUri());
+    }
+
     public function testAutoReloginOnTokenExpired(): void
     {
         $client = new Client(
@@ -129,12 +158,5 @@ final class ClientTest extends TestCase
         $out = $client->me();
         $this->assertSame(1, $out['user_id']);
         $this->assertSame('fresh', $client->token);
-    }
-
-    /** @param Response[] $responses */
-    private function mockHttp(array $responses): Http
-    {
-        $stack = HandlerStack::create(new MockHandler($responses));
-        return new Http(['handler' => $stack, 'http_errors' => false]);
     }
 }

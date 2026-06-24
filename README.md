@@ -1,8 +1,11 @@
 # heroshots/sdk (PHP SDK)
 
 High-level PHP client for the HeroShots / StudioHero platform, authenticated with
-a **portal JWT**. Covers the full JWT-reachable API surface. PSR-4 namespace
-`HeroShots\`.
+a **portal JWT**. PSR-4 namespace `HeroShots\`.
+
+Scope: image generation (incl. still-life), short video, long video, still-life
+video, the full Studio Hero storyboard flow, avatar listing & generation, and
+account balance. See [`GUIDE.md`](./GUIDE.md) for use-case walkthroughs.
 
 ## Install
 
@@ -47,9 +50,10 @@ are forwarded verbatim. `/api/v1` billing metadata is under `$result['_meta']`.
 
 ## Resources
 
-`account` · `audio` · `avatars` · `billing` · `bulk` · `connectors` ·
-`dreamcast` · `generations` · `images` · `library` · `longvideo` · `model` ·
-`pricing` · `stilllife` · `storyboard` · `uploads` · `videos`
+`uploads` · `images` · `videos` · `longvideo` · `stilllife` · `storyboard` ·
+`avatars`
+
+Plus on the client: `login()`, `me()`, `balance()`.
 
 ## Errors
 
@@ -75,5 +79,5 @@ composer test       # PHPUnit, offline (Guzzle MockHandler)
 
 ## Billing
 
-Generations cost credits. Preview with `$client->pricing->quote('video', ...)`
-before running. See `examples/full_storyboard_flow.php`.
+Generations cost credits. Check remaining credits with `$client->balance()`
+(`hs_credits` + `plan.wallet_balance`). See `examples/full_storyboard_flow.php`.

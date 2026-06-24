@@ -18,10 +18,4 @@ class Uploads extends AbstractResource
         $fields = $folder ? ['folder' => $folder] : [];
         return $this->httpPost('/upload/image', ['multipart' => $this->multipart($path, $fields)]);
     }
-
-    /** @return array<string,mixed> POST /upload/reference-audio */
-    public function referenceAudio(string $path): array
-    {
-        return $this->httpPost('/upload/reference-audio', ['multipart' => $this->multipart($path)]);
-    }
 }

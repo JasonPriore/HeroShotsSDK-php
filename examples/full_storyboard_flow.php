@@ -35,9 +35,8 @@ $productUrl = $client->uploads->image($productPath, 'products')['public_url'];
 $subjectUrl = $client->uploads->image($modelPath, 'subjects')['public_url'];
 
 $duration = 30;
-// 2. (Optional) preview cost before spending credits.
-$quote = $client->pricing->quote('video', ['duration_seconds' => $duration, 'ratio' => '16:9']);
-echo "estimated cost: " . json_encode($quote) . "\n";
+// 2. (Optional) check the balance before spending credits.
+echo "balance: " . json_encode($client->balance()) . "\n";
 
 // 3. Brief suggestions.
 $briefs = $client->storyboard->briefSuggestions($productUrl, $subjectUrl, [

@@ -9,19 +9,9 @@ use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
 use HeroShots\Errors\ApiException;
 use HeroShots\Errors\TokenExpiredException;
-use HeroShots\Resources\Account;
-use HeroShots\Resources\Audio;
 use HeroShots\Resources\Avatars;
-use HeroShots\Resources\Billing;
-use HeroShots\Resources\Bulk;
-use HeroShots\Resources\Connectors;
-use HeroShots\Resources\Dreamcast;
-use HeroShots\Resources\Generations;
 use HeroShots\Resources\Images;
-use HeroShots\Resources\Library;
 use HeroShots\Resources\LongVideo;
-use HeroShots\Resources\Model;
-use HeroShots\Resources\Pricing;
 use HeroShots\Resources\StillLife;
 use HeroShots\Resources\Storyboard;
 use HeroShots\Resources\Uploads;
@@ -42,19 +32,9 @@ class Client
     private bool $autoRelogin;
     private ClientInterface $http;
 
-    public Account $account;
-    public Audio $audio;
     public Avatars $avatars;
-    public Billing $billing;
-    public Bulk $bulk;
-    public Connectors $connectors;
-    public Dreamcast $dreamcast;
-    public Generations $generations;
     public Images $images;
-    public Library $library;
     public LongVideo $longvideo;
-    public Model $model;
-    public Pricing $pricing;
     public StillLife $stilllife;
     public Storyboard $storyboard;
     public Uploads $uploads;
@@ -80,19 +60,9 @@ class Client
         $this->autoRelogin = $autoRelogin;
         $this->http = $http ?? new Http(['timeout' => $timeout, 'http_errors' => false]);
 
-        $this->account = new Account($this);
-        $this->audio = new Audio($this);
         $this->avatars = new Avatars($this);
-        $this->billing = new Billing($this);
-        $this->bulk = new Bulk($this);
-        $this->connectors = new Connectors($this);
-        $this->dreamcast = new Dreamcast($this);
-        $this->generations = new Generations($this);
         $this->images = new Images($this);
-        $this->library = new Library($this);
         $this->longvideo = new LongVideo($this);
-        $this->model = new Model($this);
-        $this->pricing = new Pricing($this);
         $this->stilllife = new StillLife($this);
         $this->storyboard = new Storyboard($this);
         $this->uploads = new Uploads($this);
@@ -106,7 +76,7 @@ class Client
         return $client;
     }
 
-    /** @return array<string,mixed> */
+    /** @return array<string,mixed> POST /api/auth/login -> stores and returns the JWT + profile. */
     public function login(string $email, string $password): array
     {
         $data = $this->request('POST', '/api/auth/login', ['json' => ['email' => $email, 'password' => $password], 'auth' => false]);
@@ -116,22 +86,23 @@ class Client
         return $data;
     }
 
-    /**
-     * @param array<string,mixed> $extra
-     * @return array<string,mixed>
-     */
-    public function register(string $email, string $password, string $fullName, array $extra = []): array
-    {
-        $body = array_merge(['email' => $email, 'password' => $password, 'full_name' => $fullName], $extra);
-        $data = $this->request('POST', '/api/auth/register', ['json' => $body, 'auth' => false]);
-        $this->token = $data['token'] ?? null;
-        return $data;
-    }
-
-    /** @return array<string,mixed> */
+    /** @return array<string,mixed> GET /api/auth/me -> current authenticated profile. */
     public function me(): array
     {
         return $this->request('GET', '/api/auth/me');
+    }
+
+    /**
+     * Consult the account balance.
+     *
+     * GET /api/auth/stats -> includes hs_credits, total_credits_used and
+     * plan.wallet_balance.
+     *
+     * @return array<string,mixed>
+     */
+    public function balance(): array
+    {
+        return $this->request('GET', '/api/auth/stats');
     }
 
     /**
