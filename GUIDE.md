@@ -39,7 +39,8 @@ require 'vendor/autoload.php';
 use HeroShots\Client;
 
 // Login con email/password: salva il JWT e fa auto re-login alla scadenza (7 giorni).
-$client = Client::fromLogin('https://api.example.com', 'dev@partner.com', 'secret');
+// Il base URL è https://app.heroshots.ai (default, non serve passarlo).
+$client = Client::fromLogin('dev@partner.com', 'secret');
 ```
 
 Tre concetti validi per tutto l'SDK:

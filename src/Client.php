@@ -25,6 +25,8 @@ use HeroShots\Resources\Videos;
  */
 class Client
 {
+    public const DEFAULT_BASE_URL = 'https://app.heroshots.ai';
+
     public string $baseUrl;
     public ?string $token;
     private ?string $email;
@@ -49,10 +51,7 @@ class Client
         float $timeout = 120.0,
         ?ClientInterface $http = null
     ) {
-        $baseUrl = $baseUrl ?? getenv('HEROSHOTS_BASE_URL') ?: null;
-        if (!$baseUrl) {
-            throw new \InvalidArgumentException('baseUrl is required (or set HEROSHOTS_BASE_URL)');
-        }
+        $baseUrl = $baseUrl ?: (getenv('HEROSHOTS_BASE_URL') ?: self::DEFAULT_BASE_URL);
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->token = $token;
         $this->email = $email;
@@ -69,7 +68,8 @@ class Client
         $this->videos = new Videos($this);
     }
 
-    public static function fromLogin(string $baseUrl, string $email, string $password): self
+    /** Base URL defaults to https://app.heroshots.ai. */
+    public static function fromLogin(string $email, string $password, ?string $baseUrl = null): self
     {
         $client = new self($baseUrl, null, $email, $password);
         $client->login($email, $password);

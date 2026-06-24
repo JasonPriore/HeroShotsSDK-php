@@ -21,10 +21,11 @@ Requires PHP 8.1+. Runtime dependency: `guzzlehttp/guzzle`.
 use HeroShots\Client;
 
 // Email/password login: stores the JWT, auto re-logins on expiry.
-$client = Client::fromLogin('https://api.example.com', 'dev@partner.com', 'secret');
+// Base URL defaults to https://app.heroshots.ai.
+$client = Client::fromLogin('dev@partner.com', 'secret');
 
-// Or reuse an existing token (HEROSHOTS_BASE_URL env supported).
-$client = new Client('https://api.example.com', 'eyJ...');
+// Or reuse an existing token.
+$client = new Client(token: 'eyJ...');
 ```
 
 ## Usage

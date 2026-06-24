@@ -6,7 +6,6 @@
  * reference frames -> long video. Every generation step is BILLABLE.
  *
  * Run:
- *   HEROSHOTS_BASE_URL=https://api.example.com \
  *   HEROSHOTS_EMAIL=dev@partner.com HEROSHOTS_PASSWORD=... \
  *   php examples/full_storyboard_flow.php product.jpg model.jpg
  */
@@ -23,11 +22,8 @@ if (!$productPath || !$modelPath) {
     exit(1);
 }
 
-$client = Client::fromLogin(
-    getenv('HEROSHOTS_BASE_URL'),
-    getenv('HEROSHOTS_EMAIL'),
-    getenv('HEROSHOTS_PASSWORD')
-);
+// Base URL defaults to https://app.heroshots.ai.
+$client = Client::fromLogin(getenv('HEROSHOTS_EMAIL'), getenv('HEROSHOTS_PASSWORD'));
 echo "logged in as " . $client->me()['email'] . "\n";
 
 // 1. Upload references (local files -> hosted URLs).
