@@ -56,12 +56,38 @@ final class ClientTest extends TestCase
     public function testBalanceReadsStats(): void
     {
         $client = $this->client([
-            $this->json(['hs_credits' => 120, 'total_credits_used' => 30, 'plan' => ['wallet_balance' => 9.5]]),
+            $this->json([
+                'hs_credits' => 120,
+                'total_credits_used' => 30,
+                'current_month_generations' => 4,
+                'plan' => ['wallet_balance' => 9.5, 'template_id' => 'free'],
+                'recent_generations' => [['id' => 1]],
+                'offered_plans' => [['id' => 1]],
+            ]),
         ]);
         $bal = $client->balance();
         $this->assertSame(120, $bal['hs_credits']);
         $this->assertSame(9.5, $bal['plan']['wallet_balance']);
+        $this->assertSame(9.5, $bal['wallet_balance']);
+        $this->assertSame(4, $bal['current_month_generations']);
+        $this->assertArrayNotHasKey('recent_generations', $bal);
+        $this->assertArrayNotHasKey('offered_plans', $bal);
         $this->assertArrayNotHasKey('data', $bal);
+    }
+
+    public function testStatsReturnsRawAccountStats(): void
+    {
+        $client = $this->client([
+            $this->json([
+                'hs_credits' => 120,
+                'plan' => ['wallet_balance' => 9.5],
+                'recent_generations' => [['id' => 1]],
+                'offered_plans' => [['id' => 1]],
+            ]),
+        ]);
+        $stats = $client->stats();
+        $this->assertSame(1, $stats['recent_generations'][0]['id']);
+        $this->assertSame(1, $stats['offered_plans'][0]['id']);
     }
 
     public function testValidationErrorMapping(): void

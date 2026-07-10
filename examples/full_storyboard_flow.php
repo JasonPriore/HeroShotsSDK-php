@@ -32,7 +32,8 @@ $subjectUrl = $client->uploads->image($modelPath, 'subjects')['public_url'];
 
 $duration = 30;
 // 2. (Optional) check the balance before spending credits.
-echo "balance: " . json_encode($client->balance()) . "\n";
+$bal = $client->balance();
+echo "balance: " . json_encode(['hs_credits' => $bal['hs_credits'] ?? null, 'wallet_balance' => $bal['wallet_balance'] ?? null]) . "\n";
 
 // 3. Brief suggestions.
 $briefs = $client->storyboard->briefSuggestions($productUrl, $subjectUrl, [

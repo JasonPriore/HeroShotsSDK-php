@@ -54,7 +54,7 @@ are forwarded verbatim. `/api/v1` billing metadata is under `$result['_meta']`.
 `uploads` · `images` · `videos` · `longvideo` · `stilllife` · `storyboard` ·
 `avatars`
 
-Plus on the client: `login()`, `me()`, `balance()`.
+Plus on the client: `login()`, `me()`, `balance()`, `stats()`.
 
 ## Errors
 
@@ -81,4 +81,6 @@ composer test       # PHPUnit, offline (Guzzle MockHandler)
 ## Billing
 
 Generations cost credits. Check remaining credits with `$client->balance()`
-(`hs_credits` + `plan.wallet_balance`). See `examples/full_storyboard_flow.php`.
+(`hs_credits` + `wallet_balance`). Use `$client->stats()` for the full raw
+`/api/auth/stats` payload, including recent generations and offered plans. See
+`examples/full_storyboard_flow.php`.

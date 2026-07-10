@@ -92,17 +92,65 @@ class Client
         return $this->request('GET', '/api/auth/me');
     }
 
+    /** @return array<string,mixed> GET /api/auth/stats -> full raw account stats. */
+    public function stats(): array
+    {
+        $stats = $this->request('GET', '/api/auth/stats');
+        return is_array($stats) ? $stats : [];
+    }
+
     /**
-     * Consult the account balance.
+     * Return a compact account balance view from /api/auth/stats.
      *
-     * GET /api/auth/stats -> includes hs_credits, total_credits_used and
-     * plan.wallet_balance.
+     * Use stats() when you need the full raw stats payload.
      *
      * @return array<string,mixed>
      */
     public function balance(): array
     {
-        return $this->request('GET', '/api/auth/stats');
+        $stats = $this->stats();
+        $plan = isset($stats['plan']) && is_array($stats['plan']) ? $stats['plan'] : [];
+
+        $balance = [];
+        foreach ([
+            'hs_credits',
+            'total_credits_used',
+            'total_cost_charged',
+            'current_month_cost',
+            'current_month_generations',
+            'total_generations',
+            'video_package_credits_remaining',
+            'free_preview_videos_remaining',
+            'use_wallet',
+        ] as $key) {
+            if (array_key_exists($key, $stats)) {
+                $balance[$key] = $stats[$key];
+            }
+        }
+
+        $compactPlan = [];
+        foreach ([
+            'wallet_balance',
+            'template_id',
+            'billing_type',
+            'output_resolution',
+            'has_watermark',
+            'offered_plan_id',
+            'monthly_price',
+        ] as $key) {
+            if (array_key_exists($key, $plan)) {
+                $compactPlan[$key] = $plan[$key];
+            }
+        }
+
+        if ($compactPlan !== []) {
+            $balance['plan'] = $compactPlan;
+        }
+        if (array_key_exists('wallet_balance', $compactPlan)) {
+            $balance['wallet_balance'] = $compactPlan['wallet_balance'];
+        }
+
+        return $balance;
     }
 
     /**
