@@ -18,7 +18,7 @@ use HeroShots\Resources\Uploads;
 use HeroShots\Resources\Videos;
 
 /**
- * HeroShots API client (portal JWT auth).
+ * HeroShots API client (portal JWT or API key auth).
  *
  * Handles the two backend envelope styles: /api/v1/* responses are wrapped in
  * {"success","data","meta"} and unwrapped to data; everything else is bare JSON.
@@ -29,6 +29,7 @@ class Client
 
     public string $baseUrl;
     public ?string $token;
+    public string|int|null $managedUserId;
     private ?string $email;
     private ?string $password;
     private bool $autoRelogin;
@@ -49,11 +50,13 @@ class Client
         ?string $password = null,
         bool $autoRelogin = true,
         float $timeout = 120.0,
-        ?ClientInterface $http = null
+        ?ClientInterface $http = null,
+        string|int|null $managedUserId = null
     ) {
         $baseUrl = $baseUrl ?: (getenv('HEROSHOTS_BASE_URL') ?: self::DEFAULT_BASE_URL);
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->token = $token;
+        $this->managedUserId = $managedUserId;
         $this->email = $email;
         $this->password = $password;
         $this->autoRelogin = $autoRelogin;
@@ -153,6 +156,12 @@ class Client
         return $balance;
     }
 
+    public function withManagedUser(string|int|null $managedUserId): self
+    {
+        $this->managedUserId = $managedUserId;
+        return $this;
+    }
+
     /**
      * Perform an HTTP request, returning decoded JSON or throwing an ApiException.
      *
@@ -180,6 +189,9 @@ class Client
         $headers = [];
         if ($auth && $this->token) {
             $headers['Authorization'] = 'Bearer ' . $this->token;
+        }
+        if ($auth && $this->managedUserId !== null) {
+            $headers['X-Managed-User-Id'] = (string) $this->managedUserId;
         }
         $guzzle['headers'] = $headers;
 

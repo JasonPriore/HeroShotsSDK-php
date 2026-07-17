@@ -53,6 +53,41 @@ final class ClientTest extends TestCase
         $this->assertSame(5, $out['_meta']['credits_remaining']);
     }
 
+    public function testManagedUserHeaderIsSentForActAs(): void
+    {
+        $client = new Client(
+            'https://api.test',
+            'agency-key',
+            null,
+            null,
+            false,
+            120.0,
+            $this->mockHttp([
+                $this->json(['success' => true, 'data' => ['generation_id' => 'g1', 'status' => 'pending']]),
+            ]),
+            12345
+        );
+
+        $out = $client->images->generate('https://x/p.jpg');
+        $this->assertSame('g1', $out['generation_id']);
+        $this->assertSame('Bearer agency-key', $this->history[0]['request']->getHeaderLine('Authorization'));
+        $this->assertSame('12345', $this->history[0]['request']->getHeaderLine('X-Managed-User-Id'));
+    }
+
+    public function testManagedUserHeaderIsAbsentByDefaultAndWithAuthDisabled(): void
+    {
+        $client = $this->client([
+            $this->json(['success' => true, 'data' => ['generation_id' => 'g1', 'status' => 'pending']]),
+            $this->json(['token' => 'fresh']),
+        ]);
+
+        $client->images->generate('https://x/p.jpg');
+        $this->assertSame('', $this->history[0]['request']->getHeaderLine('X-Managed-User-Id'));
+
+        $client->withManagedUser(12345)->login('a@b.com', 'pw');
+        $this->assertSame('', $this->history[1]['request']->getHeaderLine('X-Managed-User-Id'));
+    }
+
     public function testBalanceReadsStats(): void
     {
         $client = $this->client([

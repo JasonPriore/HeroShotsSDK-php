@@ -1,7 +1,7 @@
 # heroshots/sdk (PHP SDK)
 
 High-level PHP client for the HeroShots / StudioHero platform, authenticated with
-a **portal JWT**. PSR-4 namespace `HeroShots\`.
+a **portal JWT or API key**. PSR-4 namespace `HeroShots\`.
 
 Scope: image generation (incl. still-life), short video, long video, still-life
 video, the full Studio Hero storyboard flow, avatar listing & generation, and
@@ -26,6 +26,22 @@ $client = Client::fromLogin('dev@partner.com', 'secret');
 
 // Or reuse an existing token.
 $client = new Client(token: 'eyJ...');
+```
+
+## Agency act-as
+
+Agency API keys can operate as a managed brand by passing the `managedUserId`
+returned by the managed-client provisioning API. The SDK adds
+`X-Managed-User-Id` to authenticated requests.
+
+```php
+use HeroShots\Client;
+
+$client = new Client(token: 'lz_live_YOUR_AGENCY_KEY', managedUserId: 12345);
+$job = $client->images->generate('https://example.com/product.jpg');
+
+// Switch target brand later, or pass null to clear it.
+$client->withManagedUser(67890);
 ```
 
 ## Usage

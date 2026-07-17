@@ -1,6 +1,6 @@
 {
     "name": "heroshots/sdk",
-    "description": "Official PHP SDK for the HeroShots / StudioHero platform (JWT auth).",
+    "description": "Official PHP SDK for the HeroShots / StudioHero platform (JWT/API key auth).",
     "type": "library",
     "license": "MIT",
     "require": {
