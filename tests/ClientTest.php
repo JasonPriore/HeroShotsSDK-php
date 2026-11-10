@@ -11,6 +11,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use HeroShots\Client;
+use HeroShots\Errors\ApiException;
 use HeroShots\Errors\NotFoundException;
 use HeroShots\Errors\ProviderException;
 use HeroShots\Errors\RateLimitException;
@@ -145,9 +146,16 @@ final class ClientTest extends TestCase
 
     public function testRateLimitMapping(): void
     {
-        $client = $this->client([new Response(429, [], 'too many')]);
-        $this->expectException(RateLimitException::class);
-        $client->balance();
+        $client = new Client('https://api.test', 'tok', null, null, false, 120.0, $this->mockHttp([
+            new Response(429, ['Retry-After' => '7'], 'too many'),
+        ]), null, 0);
+        try {
+            $client->balance();
+            $this->fail('RateLimitException not thrown');
+        } catch (RateLimitException $e) {
+            $this->assertSame(7.0, $e->retryAfter);
+            $this->assertSame(429, $e->status);
+        }
     }
 
     public function testUploadSendsMultipartFile(): void
@@ -177,9 +185,13 @@ final class ClientTest extends TestCase
         $client = $this->client([
             $this->json(['job_id' => 9, 'status' => 'failed', 'error' => ['code' => 'provider_error', 'message' => 'boom']]),
         ]);
-        $this->expectException(ProviderException::class);
-        $this->expectExceptionMessage('boom');
-        $client->longvideo->wait(9, 0.0, 5.0);
+        try {
+            $client->longvideo->wait(9, 0.0, 5.0);
+            $this->fail('ProviderException not thrown');
+        } catch (ProviderException $e) {
+            $this->assertStringContainsString('boom', $e->getMessage());
+        }
+        $this->assertSame('/api/v1/long-video/status/9', $this->history[0]['request']->getUri()->getPath());
     }
 
     public function testVideoWaitUsesSucceededTerminal(): void
@@ -189,6 +201,56 @@ final class ClientTest extends TestCase
         ]);
         $out = $client->videos->wait('t1', 0.0, 5.0);
         $this->assertStringEndsWith('v.mp4', $out['video_url']);
+        $this->assertSame('/api/v1/video/status/t1', $this->history[0]['request']->getUri()->getPath());
+    }
+
+    public function testVideoWaitUnwrapsV1Envelope(): void
+    {
+        $client = $this->client([
+            $this->json(['success' => true, 'data' => ['status' => 'succeeded', 'video_url' => 'https://cdn/v.mp4']]),
+        ]);
+        $out = $client->videos->wait('t1', 0.0, 5.0);
+        $this->assertStringEndsWith('v.mp4', $out['video_url']);
+    }
+
+    public function testWaitTimesOut(): void
+    {
+        $client = $this->client([$this->json(['job_id' => 'slow', 'status' => 'queued'])]);
+        try {
+            $client->storyboard->wait('slow', 0.0, 0.0);
+            $this->fail('timeout not raised');
+        } catch (ApiException $e) {
+            $this->assertSame('timeout', $e->errorCode);
+        }
+    }
+
+    public function testLocalPathAutouploadsBeforeGenerateWithJwt(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'hs');
+        file_put_contents($tmp, "\x89PNG\r\n");
+        $client = $this->client([
+            $this->json(['public_url' => 'https://cdn/up.png', 'filename' => 'p.png', 'folder' => 'products']),
+            $this->json(['success' => true, 'data' => ['generation_id' => 'g', 'status' => 'pending'], 'meta' => []]),
+        ]);
+        $out = $client->images->generate($tmp);
+        @unlink($tmp);
+        $this->assertSame('g', $out['generation_id']);
+        $this->assertSame('/upload/image', $this->history[0]['request']->getUri()->getPath());
+        $body = json_decode((string) $this->history[1]['request']->getBody(), true);
+        $this->assertSame('https://cdn/up.png', $body['product_image_url']);
+    }
+
+    public function testStoryboardBriefSuggestionsReturnsList(): void
+    {
+        $client = $this->client([$this->json(['suggestions' => ['a', 'b', 'c']])]);
+        $this->assertSame(['a', 'b', 'c'], $client->storyboard->briefSuggestions('https://x/p.jpg'));
+    }
+
+    public function testLongVideoViewStaysOnPortal(): void
+    {
+        $client = $this->client([$this->json(['job_id' => 1])]);
+        $client->longvideo->view('tok123');
+        $this->assertSame('/api/auth/long-video/view/tok123', $this->history[0]['request']->getUri()->getPath());
     }
 
     public function testAvatarsListUsesV1(): void

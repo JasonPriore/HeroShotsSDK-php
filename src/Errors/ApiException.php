@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace HeroShots\Errors;
 
-use RuntimeException;
-
 /**
  * Base exception for every error returned by the HeroShots API.
  *
  * The backend returns {"success": false, "error": {"code", "message", "details"}}.
  * {@see ApiException::fromResponse()} maps the code to a specific subclass.
  */
-class ApiException extends RuntimeException
+class ApiException extends HeroShotsException
 {
     public ?string $errorCode;
     public ?int $status;
@@ -73,12 +71,15 @@ class ApiException extends RuntimeException
             'plan_not_allowed' => ForbiddenException::class,
             'insufficient_scope' => ForbiddenException::class,
             'conflict' => ConflictException::class,
+            'plan_change_locked' => ConflictException::class,
             'quota_exceeded' => QuotaExceededException::class,
             'payload_too_large' => PayloadTooLargeException::class,
             'provider_error' => ProviderException::class,
             'service_unavailable' => ServiceUnavailableException::class,
             'pricing_not_configured' => ServiceUnavailableException::class,
             'stripe_not_configured' => ServiceUnavailableException::class,
+            'no_payment_method' => BillingException::class,
+            'wallet_vat_validation_required' => BillingException::class,
             'internal_error' => InternalException::class,
         ];
 

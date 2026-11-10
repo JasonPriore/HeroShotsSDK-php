@@ -4,19 +4,25 @@ Guida operativa all'SDK PHP (`heroshots/sdk`), organizzata per **caso d'uso**. O
 sezione ha codice commentato passo-passo e un **esempio di risultato** (l'output
 che ti aspetti). Per le firme complete dei metodi vedi il [README](./README.md).
 
-L'SDK copre esattamente queste capacità:
+L'SDK copre queste capacità:
 
 | Caso d'uso | Risorsa |
 |---|---|
-| Foto (immagine prodotto, anche still-life) | `images` |
+| Account, salute del servizio | `account`, `$client->me()` |
+| Foto (immagine prodotto, anche still-life), sfondi AI, diritti d'uso | `images` |
 | Video corto | `videos` |
 | Video lungo (multi-segmento) | `longvideo` |
 | Still-life video | `stilllife` |
 | Studio Hero (storyboard, tutte le fasi) | `storyboard` + `longvideo` |
-| Avatar: vedere i propri + default, generarne | `avatars` |
-| Consultare il balance | `$client->balance()` |
-| Consultare stats account complete | `$client->stats()` |
-| Caricare file → URL ospitato (usato da tutto) | `uploads` |
+| Avatar: lista, generazione, modifica, outfit, voce | `avatars` |
+| Generazione massiva di immagini | `bulk` |
+| Storico generazioni | `generations` |
+| Listino e preventivi | `pricing` |
+| Libreria: prodotti, collezioni, sfondi, categorie | `assets`, `collections`, `backgrounds`, `categories` |
+| Documenti BYO (manleva, liberatoria) | `legal` |
+| Agenzie e brand gestiti | `agency`, `brand` |
+| Consultare il balance / stats complete | `$client->balance()`, `$client->stats()` |
+| Caricare file → URL ospitato | `uploads` |
 
 ---
 
@@ -30,6 +36,13 @@ L'SDK copre esattamente queste capacità:
 - [5. Video lungo](#5-video-lungo)
 - [6. Studio Hero — tutte le fasi](#6-studio-hero--tutte-le-fasi)
 - [7. Avatar](#7-avatar)
+- [8. Download](#8-download)
+- [9. Preventivi, listino e diritti d'uso](#9-preventivi-listino-e-diritti-duso)
+- [10. Storico generazioni](#10-storico-generazioni)
+- [11. Bulk (generazione massiva)](#11-bulk-generazione-massiva)
+- [12. Libreria](#12-libreria)
+- [13. Documenti BYO (legal)](#13-documenti-byo-legal)
+- [14. Agenzia e brand](#14-agenzia-e-brand)
 - [Gestione errori](#gestione-errori)
 
 ---
@@ -40,18 +53,41 @@ L'SDK copre esattamente queste capacità:
 require 'vendor/autoload.php';
 use HeroShots\Client;
 
-// Login con email/password: salva il JWT e fa auto re-login alla scadenza (7 giorni).
+// API key B2B (server-to-server). Viene letta anche da HEROSHOTS_API_KEY.
+$client = Client::withApiKey('lz_live_...');
+
+// Oppure login con email/password: salva il JWT e fa auto re-login alla scadenza (7 giorni).
 // Il base URL è https://app.heroshots.ai (default, non serve passarlo).
 $client = Client::fromLogin('dev@partner.com', 'secret');
 ```
 
-Tre concetti validi per tutto l'SDK:
+**Quale credenziale serve dove:**
 
-1. **Upload automatico.** Ovunque si passi un'immagine puoi dare un **path locale**:
-   l'SDK lo carica e usa l'URL ospitato. Gli URL `http(s)` passano invariati.
+| Endpoint | API key | JWT portale |
+|---|---|---|
+| `/api/v1/*`: immagini, video, video lungo, still-life, avatar, bulk, libreria, storico, listino, agenzia, brand | ✅ | ✅ |
+| Storyboard (Studio Hero), upload, candidati immagine, cambio sfondo still-life, documenti BYO | ❌ | ✅ |
+
+- Le API key sono **rifiutate sul piano Free** (`ForbiddenException`, codice
+  `plan_not_allowed`), tranne per gli account agenzia.
+- `$client->usesApiKey()` dice quale credenziale sta usando il client.
+
+Concetti validi per tutto l'SDK:
+
+1. **Upload automatico (solo JWT portale).** Ovunque si passi un'immagine puoi
+   dare un **path locale**: l'SDK lo carica e usa l'URL ospitato. Gli URL
+   `http(s)` e i `data:` URI passano invariati. Con una API key passa URL
+   pubblici `https://`: con un path locale l'SDK lancia `HeroShotsException`
+   prima di inviare la richiesta.
 2. **Job asincroni.** Le generazioni ritornano un `job_id`/`task_id`; chiama
    `wait(...)` per attendere il completamento (gestisce gli stati terminali).
-3. **Costo.** Ogni generazione consuma crediti: controlla con `$client->balance()`.
+3. **Costo.** Ogni generazione consuma crediti: controlla con `$client->balance()`
+   e chiedi il prezzo prima con `$client->pricing->quote(...)`.
+4. **Retry automatico.** Le risposte HTTP 429 vengono ripetute fino a
+   `maxRetries` volte (default 2, rispettando `Retry-After`). Gli upload
+   multipart non vengono mai ripetuti.
+5. **File.** Dove serve un file (upload, bulk, asset, cover, documenti) puoi
+   passare un path, una stringa di byte o una risorsa stream aperta.
 
 ---
 
@@ -66,20 +102,18 @@ sezioni successive: l'SDK aggiunge `X-Managed-User-Id` alle richieste autenticat
 require 'vendor/autoload.php';
 use HeroShots\Client;
 
-$client = new Client(
-    token: 'lz_live_YOUR_AGENCY_KEY',
-    managedUserId: 12345 // brand/utente gestito selezionato
-);
+$client = Client::withApiKey('lz_live_YOUR_AGENCY_KEY', null, 12345); // brand/utente gestito selezionato
 
 // Da qui in poi le generazioni vengono eseguite come quel brand.
-$gen = $client->images->generate('product.jpg', payload: [
+// Con una API key passa URL pubblici (niente path locali).
+$gen = $client->images->generate('https://example.com/product.jpg', payload: [
     'still_life' => true,
     'ratio'      => '1:1',
 ]);
 
 // Per passare a un altro brand gestito senza ricreare il client:
 $client->withManagedUser(67890);
-$v = $client->videos->generate('product.jpg', [
+$v = $client->videos->generate('https://example.com/product.jpg', [
     'custom_prompt' => 'slow dolly-in',
 ]);
 
@@ -97,16 +131,25 @@ generazione. Lo stato della relazione e gli scope vengono validati dall'API.
 Consulta i crediti residui prima di generare.
 
 ```php
-$bal = $client->balance();   // vista compatta di GET /api/auth/stats
+$bal = $client->balance();
 
 echo "HS credits: {$bal['hs_credits']}\n";
 echo "Wallet: {$bal['wallet_balance']} €\n";
 
-// Se vuoi la risposta completa dell'endpoint (recent_generations, piani, flag):
+// Con JWT portale: risposta completa di GET /api/auth/stats (recent_generations, piani, flag).
 $stats = $client->stats();
 ```
 
-**Esempio di risultato:**
+Con una **API key** `balance()` legge `GET /api/v1/me` e ritorna `hs_credits`,
+`currency_credit` (wallet in EUR, anche come `wallet_balance`) e `billing_type`.
+Con un **JWT portale** legge `/api/auth/stats` e aggiunge piano e contatori.
+
+**Esempio di risultato (API key):**
+```json
+{ "hs_credits": 1240, "currency_credit": 48.5, "wallet_balance": 48.5, "billing_type": "debit" }
+```
+
+**Esempio di risultato (JWT portale):**
 ```json
 {
   "hs_credits": 1240,
@@ -139,6 +182,16 @@ $done = $client->images->wait($gen['generation_id']);
 echo $done['images'][0]['url'] ?? '';
 ```
 
+Altre funzioni sulle immagini:
+
+```php
+// Sfondo generato dall'AI (size: 2K | 4K).
+$bg = $client->images->generateBackground('marble studio, soft daylight', '4:5', '2K');
+
+// Prompt di modifica per un'area ritagliata dell'immagine.
+$edit = $client->images->analyzeEditRegion('data:image/png;base64,...', 'togli il riflesso');
+```
+
 **Esempio di risultato (`$done`):**
 ```json
 {
@@ -164,6 +217,15 @@ $v = $client->videos->generate('product.jpg', [
 
 $done = $client->videos->wait($v['task_id']);   // attende succeeded/failed
 echo $done['video_url'];
+
+// Con API key: URL pubblici e avatar della libreria.
+$v = $client->videos->generate(null, [
+    'product_image_url' => 'https://example.com/product.jpg',
+    'avatar_id'         => 42,
+    'duration_seconds'  => 15,
+]);
+// Stato singolo (provider opzionale):
+$st = $client->videos->status($v['task_id'] ?? $v['video_id']);
 ```
 
 **Esempio di risultato (`$done`):**
@@ -188,7 +250,11 @@ $task = $client->stilllife->start(
 $done = $client->stilllife->wait($task['task_id']);
 echo $done['video_url'] ?? '';
 
-// (Opzionale) prova e applica un nuovo sfondo:
+// Opzionali: immagine di dettaglio e video di riferimento.
+// $client->stilllife->start('https://.../p.jpg', 'https://.../bg.jpg',
+//     detailImageUrl: 'https://.../detail.jpg', referenceVideoUrl: 'https://.../ref.mp4');
+
+// (Opzionale, solo JWT portale) prova e applica un nuovo sfondo:
 $client->stilllife->changeBackground($task['task_id'], ['background_url' => 'bg2.jpg']);
 ```
 
@@ -206,15 +272,18 @@ da uno storyboard di Studio Hero (vedi §6).
 
 ```php
 $job = $client->longvideo->start(
-    imageUrl:     'product.jpg',
-    customPrompt: '15s ad, three beats: reveal, detail, logo',
-    ratio:        '16:9',
-    resolution:   '1080p',
-    payload:      ['duration_seconds' => 15]
+    imageUrl:        'product.jpg',
+    customPrompt:    '30s ad, three beats: reveal, detail, logo',
+    ratio:           '16:9',
+    resolution:      '1080p',
+    durationSeconds: 30            // 30, 45 o 60
 );
 
 $final = $client->longvideo->wait($job['job_id']);   // success = "done"
 echo $final['final_video_url'];
+
+// Rigenera un segmento con un commento; cascade = true rifà anche i successivi.
+$client->longvideo->regenerateSegment($job['job_id'], 1, 'camera più lenta', true);
 ```
 
 **Esempio di risultato (`$final`):**
@@ -336,48 +405,200 @@ Fase 6 — `final` → vedi [§5](#5-video-lungo) (`final_video_url`).
 
 ## 7. Avatar
 
-Elenca i tuoi avatar e quelli di default, e richiedi la generazione di uno nuovo.
+Elenca i tuoi avatar e quelli di default, generane di nuovi e modificali.
 
 ```php
-// Lista (tuoi + default).
-$list = $client->avatars->list();
+// Lista (tuoi + default), con filtri opzionali.
+$list = $client->avatars->list(['gender' => 'female', 'per_page' => 20]);
 foreach ($list['avatars'] as $a) {
-    echo "{$a['id']}  {$a['name']}  ({$a['kind']})\n";
+    echo "{$a['id']}  {$a['name']}\n";
 }
 
 // Dettaglio singolo.
 $one = $client->avatars->get(42);
 
-// Richiesta generazione nuovo avatar.
+// Generazione con AI.
 $gen = $client->avatars->generate([
+    'generate_with_ai' => true,
     'prompt' => 'donna 30 anni, capelli scuri, sguardo deciso',
     'gender' => 'female',
+], 'Aria');
+
+// Da una foto per vista (viste ammesse: Avatars::VIEW_TYPES).
+$client->avatars->createFromSteps('Luca', [
+    'closeup'  => 'https://.../closeup.jpg',
+    'fullbody' => 'https://.../fullbody.jpg',
 ]);
+
+// Modifica.
+$client->avatars->update(42, ['name' => 'Giulia']);
+$client->avatars->uploadView(42, 'profile', 'https://.../profile.jpg');
+$client->avatars->regenerateView(42, 'closeup');
+$client->avatars->setImageSet(42, 'generated');      // original | generated
+$client->avatars->generateVoice(42);
+
+// Outfit: risolvi un link shop, vesti l'avatar, annulla.
+$items = $client->avatars->resolveOutfitLink('https://shop.example.com/jacket');
+$client->avatars->changeOutfit(42, [['slot' => 'top', 'url' => 'https://.../top.jpg']]);
+$client->avatars->restoreOutfit(42);
+
+// Documento di consenso firmato (DOCX).
+$client->avatars->consentDocument(42, 'out/consent.docx');
 ```
 
 **Esempio di risultato (`$list`):**
 ```json
 {
   "avatars": [
-    { "id": 42, "name": "Aria",  "kind": "owned",   "image_url": "https://cdn/.../42.png" },
-    { "id": 7,  "name": "Default Male 01", "kind": "default", "image_url": "https://cdn/.../d7.png" }
-  ]
+    { "id": 42, "name": "Aria",  "image_url": "https://cdn/.../42.png" },
+    { "id": 7,  "name": "Default Male 01", "image_url": "https://cdn/.../d7.png" }
+  ],
+  "total": 2, "page": 1, "pages": 1
 }
 ```
 
 ---
 
-## Gestione errori
+## 8. Download
 
-Ogni errore lancia un'eccezione tipizzata che estende `HeroShots\Errors\ApiException`
-(`->errorCode`, `->status`, `->details`).
+I metodi di download ritornano i **byte** del file come stringa, oppure, se
+passi una destinazione, scrivono il file (creando le cartelle) e ritornano il path.
 
 ```php
+$bytes = $client->images->download($logId);                   // stringa di byte
+$path  = $client->videos->download($logId, 'out/spot.mp4');   // salvato su disco
+```
+
+---
+
+## 9. Preventivi, listino e diritti d'uso
+
+```php
+$catalog = $client->pricing->catalog();                          // prezzi del tuo piano
+$quote   = $client->pricing->quote('video', ['duration_seconds' => 15]);
+echo $quote['total_eur'];
+
+$tiers = $client->pricing->videoPackagesCatalog();
+$pkg   = $client->pricing->videoPackagesQuote('growth');
+$rules = $client->pricing->usageRightsRules();
+
+// Diritti d'uso di un'immagine già generata: preventivo e upgrade.
+$q = $client->images->usageRightsQuote($logId, null, 'paid_digital', '6_months');
+$client->images->usageRightsUpgrade($logId, [['type' => 'paid_digital', 'duration' => '6_months']]);
+```
+
+---
+
+## 10. Storico generazioni
+
+```php
+$page = $client->generations->list(['type' => 'video', 'per_page' => 20]);
+
+// Tutte le pagine, una generazione alla volta.
+foreach ($client->generations->iterate(['type' => 'image']) as $g) {
+    echo $g['id'] . "\n";
+}
+```
+
+---
+
+## 11. Bulk (generazione massiva)
+
+Una foto prodotto per item: crea la bulk, carica le immagini, avvia, attendi,
+scarica lo zip.
+
+```php
+$bulk = $client->bulk->create('foto e-commerce su sfondo bianco', 42);
+$client->bulk->uploadImages($bulk['id'], ['p1.jpg', 'p2.jpg', $bytes]);
+$client->bulk->start($bulk['id']);
+
+// Ritorna su completed, partially_completed o failed (non lancia eccezioni).
+$final = $client->bulk->wait($bulk['id']);
+echo $final['status'];
+
+$client->bulk->downloadGenerated($bulk['id'], 'out/bulk.zip');
+// Solo alcuni item:
+$client->bulk->downloadGenerated($bulk['id'], 'out/some.zip', [101, 102]);
+```
+
+---
+
+## 12. Libreria
+
+```php
+// Prodotti (multipart con la foto principale).
+$asset = $client->assets->create('Borsa', 'bag.jpg', 4, 'pelle naturale');
+$client->assets->addImage($asset['id'], 'bag_side.jpg');
+
+// Collezioni di generazioni.
+$col = $client->collections->create('Estate 2026');
+$client->collections->addGeneration($col['id'], $logId);
+
+// Sfondi salvati (da file o da URL).
+$client->backgrounds->create(imageUrl: 'https://.../bg.jpg', name: 'Marmo');
+
+// Categorie.
+$all = $client->categories->list();
+$client->categories->setSelected([1, 2]);
+```
+
+---
+
+## 13. Documenti BYO (legal)
+
+Solo JWT portale. Gli avatar di persone reali richiedono la manleva aziendale
+(una volta per brand) e, per ogni persona, la liberatoria firmata più un
+documento d'identità.
+
+```php
+$status = $client->legal->byoStatus();
+$client->legal->manlevaTemplate('out/manleva.docx');
+$client->legal->liberatoriaTemplate('out/liberatoria.docx');
+
+$client->legal->uploadManleva($tenantId, 'manleva_firmata.pdf', 'Mario Rossi', 'CEO');
+
+$release = $client->uploads->consentDocument('liberatoria_firmata.pdf')['public_url'];
+$idDoc   = $client->uploads->consentDocument('documento.jpg')['public_url'];
+$client->legal->attachLiberatoria($tenantId, $avatarId, $release, $idDoc, 'modella@example.com', '1995-04-12');
+```
+
+---
+
+## 14. Agenzia e brand
+
+```php
+// Lato agenzia.
+$clients = $client->agency->clients();
+$client->agency->inviteClient('brand@example.com');
+$client->agency->topup($relationshipId, 25.0);         // EUR dal wallet agenzia
+$client->agency->updateClient($relationshipId, 'read_only');
+
+// Lato brand.
+$client->brand->acceptManagerInvite($token);
+$rel = $client->brand->managerRelationship();
+$client->brand->requestTermination('cambio fornitore');
+```
+
+Per generare come il brand vedi [§0.1](#01-agenzie-selezionare-il-brandutente-gestito).
+
+---
+
+## Gestione errori
+
+Ogni errore dell'API lancia un'eccezione tipizzata che estende
+`HeroShots\Errors\ApiException` (`->errorCode`, `->status`, `->details`), a sua
+volta sottoclasse di `HeroShots\Errors\HeroShotsException` (lanciata anche per
+errori lato client, es. un file locale con una API key).
+
+```php
+use HeroShots\Errors\BillingException;
 use HeroShots\Errors\ValidationException;
 use HeroShots\Errors\QuotaExceededException;
 
 try {
-    $client->videos->generate('product.jpg');
+    $client->videos->generate('https://example.com/product.jpg');
+} catch (BillingException $e) {
+    echo "Completa i dati di fatturazione nel portale: {$e->errorCode}";
 } catch (QuotaExceededException $e) {
     echo "Crediti esauriti: " . $e->getMessage();
 } catch (ValidationException $e) {
@@ -392,6 +613,8 @@ try {
 | `ForbiddenException` | piano/permessi non sufficienti |
 | `NotFoundException` | risorsa o job inesistente/scaduto |
 | `QuotaExceededException` | crediti/quota esauriti |
+| `BillingException` | nessun metodo di pagamento o dati di fatturazione (P.IVA) mancanti |
+| `ConflictException` | conflitto (es. email già registrata, cambio piano bloccato) |
 | `ProviderException` | generazione fallita (anche job falliti) |
-| `RateLimitException` | troppe richieste (429) |
+| `RateLimitException` | troppe richieste (429), dopo i retry automatici; `->retryAfter` in secondi |
 | `ServiceUnavailableException` / `InternalException` | problemi lato server |
