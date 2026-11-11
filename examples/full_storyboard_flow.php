@@ -67,5 +67,5 @@ $storyboard = $frames['storyboard'] ?? $storyboard;
 
 // 7. Long video render.
 $vjob = $client->longvideo->start($productUrl, null, $storyboard, '16:9');
-$result = $client->longvideo->wait($vjob['job_id']);
+$result = $client->longvideo->render($vjob['job_id']); // wait for clips, export, final cut
 echo "FINAL VIDEO: " . ($result['final_video_url'] ?? '(none)') . "\n";

@@ -60,7 +60,8 @@ class ApiException extends HeroShotsException
             'missing_bearer_token' => AuthException::class,
             'invalid_api_key' => AuthException::class,
             'invalid_token' => AuthException::class,
-            'invalid_or_expired_token' => AuthException::class,
+            // Portal routes report an expired login this way: relogin once, like token_expired.
+            'invalid_or_expired_token' => TokenExpiredException::class,
             'unauthorized' => AuthException::class,
             'user_not_found' => AuthException::class,
             'token_expired' => TokenExpiredException::class,

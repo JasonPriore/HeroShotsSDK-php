@@ -52,7 +52,7 @@ use Psr\Http\Message\ResponseInterface;
  */
 class Client
 {
-    public const VERSION = '0.3.0';
+    public const VERSION = '0.3.1';
     public const DEFAULT_BASE_URL = 'https://app.heroshots.ai';
     public const DEFAULT_TIMEOUT = 120.0;
     public const DEFAULT_MAX_RETRIES = 2;

@@ -116,7 +116,7 @@ final class ApiV1Test extends TestCase
         $this->assertSame('/api/v1/me', $req->getUri()->getPath());
         $this->assertSame('Bearer ' . self::KEY, $req->getHeaderLine('Authorization'));
         $this->assertSame('heroshots-php/' . Client::VERSION, $req->getHeaderLine('User-Agent'));
-        $this->assertSame('0.3.0', Client::VERSION);
+        $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', Client::VERSION);
         $this->assertSame('application/json', $req->getHeaderLine('Accept'));
         $this->assertSame(1, $out['user']['id']);
     }
@@ -548,5 +548,44 @@ final class ApiV1Test extends TestCase
         $this->expectException(HeroShotsException::class);
         $this->expectExceptionMessage('File not found');
         $client->uploads->image('/nope/missing.jpg');
+    }
+
+    public function testLongVideoWaitStopsAtSegmentsReady(): void
+    {
+        $client = $this->apiClient([
+            $this->ok(['job_id' => 5, 'status' => 'generating']),
+            $this->ok(['job_id' => 5, 'status' => 'segments_ready', 'final_video_url' => null,
+                'segments' => [['index' => 1, 'video_url' => 'https://cdn/1.mp4']]]),
+        ]);
+        $out = $client->longvideo->wait(5, 0, 5);
+        $this->assertSame('segments_ready', $out['status']);
+        $this->assertStringEndsWith('1.mp4', $out['segments'][0]['video_url']);
+    }
+
+    public function testLongVideoRenderExportsThenWaitsForFinal(): void
+    {
+        $client = $this->jwtClient([
+            $this->ok(['status' => 'segments_ready']),
+            $this->json(['job_id' => 5, 'status' => 'concatenating'], 202),
+            $this->ok(['status' => 'concatenating']),
+            $this->ok(['status' => 'done', 'final_video_url' => 'https://cdn/final.mp4']),
+        ]);
+        $out = $client->longvideo->render(5, null, 0, 5);
+        $this->assertStringEndsWith('final.mp4', $out['final_video_url']);
+        $export = $this->history[1]['request'];
+        $this->assertSame('/api/auth/long-video/5/export', $export->getUri()->getPath());
+        $this->assertSame('{}', (string) $export->getBody());
+    }
+
+    public function testInvalidOrExpiredTokenTriggersRelogin(): void
+    {
+        $http = $this->mockHttp([
+            $this->json(['success' => false, 'error' => ['code' => 'invalid_or_expired_token', 'message' => 'x']], 401),
+            $this->json(['token' => 'fresh']),
+            $this->json(['status' => 'concatenating'], 202),
+        ]);
+        $client = new Client(self::BASE, 'stale', 'a@b.com', 'pw', true, 120.0, $http);
+        $this->assertSame('concatenating', $client->longvideo->export(5)['status']);
+        $this->assertSame('fresh', $client->token);
     }
 }

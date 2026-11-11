@@ -36,7 +36,7 @@ constructor argument or `HEROSHOTS_BASE_URL`).
 | Endpoints | API key | Portal JWT |
 |---|---|---|
 | `/api/v1/*`: images, videos, long video, still life, avatars, bulk, library, generations, pricing, agency, brand | ✅ | ✅ |
-| Storyboard (StudioHero), uploads, image candidates, still-life background edits, BYO legal documents | ❌ | ✅ |
+| Storyboard (StudioHero), uploads, image candidates, long-video export (final cut), still-life background edits, BYO legal documents | ❌ | ✅ |
 
 - API keys are **refused on the Free plan** (`ForbiddenException`, code
   `plan_not_allowed`), except for agency accounts.
@@ -59,7 +59,7 @@ $job = $client->videos->generate(null, [
     'custom_prompt' => 'slow dolly-in, soft studio light',
     'duration_seconds' => 15,
 ]);
-$done = $client->videos->wait($job['task_id'] ?? $job['video_id']);
+$done = $client->videos->wait($job['video_id']);
 echo $done['video_url'];
 ```
 
@@ -74,7 +74,7 @@ billing metadata (charges, credits left) is under `$result['_meta']`.
 | `$client->account` | `me()`, `health()` |
 | `$client->images` | `generate`, `status`, `wait`, `download`, `generateBackground`, `usageRightsQuote`, `usageRightsUpgrade`, `analyzeEditRegion`, `candidates`, `selectCandidate` |
 | `$client->videos` | `generate`, `status`, `wait`, `download` |
-| `$client->longvideo` | `start`, `status`, `wait`, `regenerateSegment`, `view` |
+| `$client->longvideo` | `start`, `status`, `wait` (until `segments_ready`), `regenerateSegment`, `export`, `render` (final cut, portal JWT), `view` |
 | `$client->stilllife` | `start`, `status`, `wait`, `previewBackground`, `changeBackground`, `changeBackgroundStatus` |
 | `$client->storyboard` | `briefSuggestions`, `candidates`, `generate`, `frames`, `revise`, `status`, `wait`, `subjectMeasurements`, `analyzeProduct`, `creativity` |
 | `$client->avatars` | `list`, `get`, `generate`, `createFromSteps`, `update`, `delete`, `uploadView`, `regenerateView`, `regenerateVariants`, `generatedVersion`, `setImageSet`, `generateSheet`, `generateVoice`, `resolveOutfitLink`, `changeOutfit`, `restoreOutfit`, `improvePrompt`, `analyzeAttributes`, `consentDocument` (+ `Avatars::VIEW_TYPES`) |
@@ -109,7 +109,7 @@ $job = $client->storyboard->generate($briefs[0], 30, $candidates[0], 'product.jp
 $sb  = $client->storyboard->wait($job['job_id']);          // polls until done/failed
 
 $vjob  = $client->longvideo->start('product.jpg', null, $sb['storyboard']);
-$final = $client->longvideo->wait($vjob['job_id']);
+$final = $client->longvideo->render($vjob['job_id']);   // clips + final cut (portal JWT)
 echo $final['final_video_url'];
 
 // Re-render one segment (and the following ones) with a note.
